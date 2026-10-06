@@ -3,4 +3,5 @@ project(learning_redis)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(learning_redis server.cpp)
+add_executable(server server.cpp)
+add_executable(client client.cpp)
