@@ -4,14 +4,21 @@
 #include <unistd.h>
 
 
-void process_in(int fd) {
+bool process_in(int fd,int cl_cnt) {
     char rbuf[64]={};
     ssize_t rsize=read(fd,rbuf,sizeof(rbuf)-1);
     if (rsize<0) die("read err");
-    std::cout<<rbuf<<'\n';
-
-    std::string wbuf="server : it's me PaNNiiiiC";
+    if (rbuf[0]=='-') {
+        std::cout<<"server terminated by client #"<<cl_cnt;
+        write(fd,"termination successful",23);
+        return false;
+    };
+    std::cout<<"client #"<<cl_cnt<<" says:"<<rbuf<<'\n';
+    std::string wbuf="message starting with ";
+    wbuf+=rbuf[0];wbuf+=rbuf[1];
+    wbuf+="**** recieved";
     write(fd,wbuf.data(),wbuf.size());
+    return true;
 }
 
 int main() {
@@ -30,15 +37,16 @@ int main() {
 
     //listening
     if (listen(server_fd,SOMAXCONN)) die("can't listen");
-    while (true) {
+    int cl_cnt=0;
+    while (++cl_cnt) {
         //accepting
         sockaddr_in cl_addr={};
         socklen_t len=sizeof(cl_addr);
         int conn_fd=accept(server_fd,reinterpret_cast<sockaddr *>(&cl_addr),&len);
         if (conn_fd<0) continue;
-        process_in(conn_fd); // read/write;
+        bool cont=process_in(conn_fd,cl_cnt); // read/write;
         close(conn_fd);
+        if (!cont)break;
     }
-
     return 0;
 }
