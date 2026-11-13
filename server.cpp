@@ -2,23 +2,39 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <unistd.h>
+#include <string.h>
+const int mx_sz=4096;
+int request(int fd) {
 
-
-bool process_in(int fd,int cl_cnt) {
-    char rbuf[64]={};
-    ssize_t rsize=read(fd,rbuf,sizeof(rbuf)-1);
-    if (rsize<0) die("read err");
-    if (rbuf[0]=='-') {
-        std::cout<<"server terminated by client #"<<cl_cnt;
-        write(fd,"termination successful",23);
-        return false;
-    };
-    std::cout<<"client #"<<cl_cnt<<" says:"<<rbuf<<'\n';
-    std::string wbuf="message starting with ";
-    wbuf+=rbuf[0];wbuf+=rbuf[1];
-    wbuf+="**** recieved";
-    write(fd,wbuf.data(),wbuf.size());
-    return true;
+    // receiving
+    char rbuf[4+mx_sz];
+    errno=0;
+    int32_t rv=read_all(fd,rbuf,4);
+    if (rv) {
+        printf(errno==0 ? "EOF" : "read_all error");
+        return rv;
+    }
+    int32_t sz=0;
+    memcpy(&sz,rbuf,4);
+    if (sz > mx_sz) {
+        printf("msg too long");
+        return -1;
+    }
+    rv=read_all(fd,&rbuf[4],sz);
+    if (rv) {
+        printf("read_all error");
+        return rv;
+    }
+    //responding
+    char wbuf[4+mx_sz];
+    char pref[]="your message starting with ";
+    char suff[]="was sucessfully received";
+    size_t ans_sz=strlen(pref)+strlen(suff)+1;
+    memcpy(wbuf,&ans_sz,4);
+    memcpy(&wbuf[4],pref,strlen(pref));
+    memcpy(&wbuf[4+strlen(pref)],&rbuf[4],1);
+    memcpy(&wbuf[5+strlen(pref)],suff,strlen(suff));
+    return write_all(fd,wbuf,ans_sz);
 }
 
 int main() {
@@ -37,16 +53,14 @@ int main() {
 
     //listening
     if (listen(server_fd,SOMAXCONN)) die("can't listen");
-    int cl_cnt=0;
-    while (++cl_cnt) {
+    while (true) {
         //accepting
         sockaddr_in cl_addr={};
         socklen_t len=sizeof(cl_addr);
         int conn_fd=accept(server_fd,reinterpret_cast<sockaddr *>(&cl_addr),&len);
         if (conn_fd<0) continue;
-        bool cont=process_in(conn_fd,cl_cnt); // read/write;
+        request(conn_fd); // read/write;
         close(conn_fd);
-        if (!cont)break;
     }
     return 0;
 }
