@@ -2,7 +2,7 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <unistd.h>
-#include <string.h>
+#include <cstring>
 const int mx_sz=4096;
 int request(int fd) {
 
@@ -25,16 +25,18 @@ int request(int fd) {
         printf("read_all error");
         return rv;
     }
+    printf("message received(%d bytes): %s\n",(int)sz,&rbuf[4]);
+
     //responding
     char wbuf[4+mx_sz];
     char pref[]="your message starting with ";
-    char suff[]="was sucessfully received";
+    char suff[]="**** was sucessfully received\n";
     size_t ans_sz=strlen(pref)+strlen(suff)+1;
     memcpy(wbuf,&ans_sz,4);
     memcpy(&wbuf[4],pref,strlen(pref));
     memcpy(&wbuf[4+strlen(pref)],&rbuf[4],1);
     memcpy(&wbuf[5+strlen(pref)],suff,strlen(suff));
-    return write_all(fd,wbuf,ans_sz);
+    return write_all(fd,wbuf,ans_sz+4);
 }
 
 int main() {
@@ -59,8 +61,12 @@ int main() {
         socklen_t len=sizeof(cl_addr);
         int conn_fd=accept(server_fd,reinterpret_cast<sockaddr *>(&cl_addr),&len);
         if (conn_fd<0) continue;
-        request(conn_fd); // read/write;
+        int32_t rv=0;
+        while (rv>=0) {
+            rv=request(conn_fd); // read/write;
+        }
         close(conn_fd);
     }
+
     return 0;
 }
